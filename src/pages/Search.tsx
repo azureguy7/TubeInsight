@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAppStore, type SavedItem } from '../store/useAppStore';
+import { useAppStore, type SavedItem, formatNumber, formatDuration } from '../store/useAppStore';
 import { youtubeService } from '../services/youtubeService';
 import { Search as SearchIcon, Filter, Save, Download, Calendar, Clock, Globe } from 'lucide-react';
 import './Search.css';
@@ -53,21 +53,42 @@ const Search = () => {
         }
     };
 
+    const calculateMetrics = (item: any) => {
+        const viewCount = parseInt(item.statistics.viewCount || '0', 10);
+        const subCount = parseInt(item.channelStatistics.subscriberCount || '1', 10);
+        const totalViews = parseInt(item.channelStatistics.viewCount || '1', 10);
+
+        return {
+            performanceRatio: viewCount / subCount,
+            contributionScore: (viewCount / totalViews) * 100
+        };
+    };
+
     const handleSaveToLibrary = () => {
         setIsSaving(true);
         const itemsToSave: SavedItem[] = results
             .filter(item => selectedItems.has(item.id.videoId))
-            .map(item => ({
-                id: item.id.videoId,
-                title: item.snippet.title,
-                thumbnail: item.snippet.thumbnails.medium.url,
-                channelTitle: item.snippet.channelTitle,
-                publishedAt: item.snippet.publishedAt,
-                description: item.snippet.description,
-                tags: [],
-                note: '',
-                savedAt: new Date().toISOString()
-            }));
+            .map(item => {
+                const metrics = calculateMetrics(item);
+                return {
+                    id: item.id.videoId,
+                    title: item.snippet.title,
+                    thumbnail: item.snippet.thumbnails.medium.url,
+                    channelTitle: item.snippet.channelTitle,
+                    publishedAt: item.snippet.publishedAt,
+                    description: item.snippet.description,
+                    tags: [],
+                    note: '',
+                    savedAt: new Date().toISOString(),
+                    viewCount: item.statistics.viewCount || '0',
+                    likeCount: item.statistics.likeCount || '0',
+                    duration: item.contentDetails.duration || '',
+                    subscriberCount: item.channelStatistics.subscriberCount || '0',
+                    channelTotalViews: item.channelStatistics.viewCount || '0',
+                    performanceRatio: metrics.performanceRatio,
+                    contributionScore: metrics.contributionScore
+                };
+            });
 
         addToLibrary(itemsToSave);
         setSelectedItems(new Set());
@@ -90,18 +111,15 @@ const Search = () => {
 
     return (
         <div className="search-layout">
-            {/* Sidebar: Filters */}
             <aside className="filter-sidebar glass">
                 <div className="sidebar-header">
                     <Filter size={18} />
                     <h3>필터 상세 설정</h3>
                 </div>
-
                 <div className="filter-group">
                     <label><Calendar size={16} /> 업로드 날짜 이후</label>
                     <input type="date" value={publishedAfter} onChange={(e) => setPublishedAfter(e.target.value)} />
                 </div>
-
                 <div className="filter-group">
                     <label><Clock size={16} /> 영상 길이</label>
                     <select value={duration} onChange={(e) => setDuration(e.target.value)}>
@@ -111,7 +129,6 @@ const Search = () => {
                         <option value="long">20분 초과</option>
                     </select>
                 </div>
-
                 <div className="filter-group">
                     <label><Globe size={16} /> 언어 (Relevance)</label>
                     <select value={relevanceLanguage} onChange={(e) => setRelevanceLanguage(e.target.value)}>
@@ -122,14 +139,13 @@ const Search = () => {
                 </div>
             </aside>
 
-            {/* Main Content */}
             <main className="search-main">
                 <header className="search-header glass">
                     <form className="search-input-form" onSubmit={handleSearch}>
                         <SearchIcon size={20} className="search-icon" />
                         <input
                             type="text"
-                            placeholder="검색어를 입력하세요 (예: AI Trend, K-POP...)"
+                            placeholder="검색어를 입력하세요..."
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                         />
@@ -137,21 +153,14 @@ const Search = () => {
                             {isLoading ? '검색 중...' : '검색'}
                         </button>
                     </form>
-
                     <div className="action-bar">
                         <span className="selected-count">{selectedItems.size}개 선택됨</span>
                         <div className="action-buttons">
-                            <button
-                                className="btn btn-secondary"
-                                disabled={selectedItems.size === 0 || isSaving}
-                                onClick={handleSaveToLibrary}
-                            >
-                                <Save size={18} />
-                                {isSaving ? '저장 중...' : '보관함 저장'}
+                            <button className="btn btn-secondary" disabled={selectedItems.size === 0 || isSaving} onClick={handleSaveToLibrary}>
+                                <Save size={18} /> {isSaving ? '저장 중...' : '보관함 저장'}
                             </button>
                             <button className="btn btn-secondary" disabled={selectedItems.size === 0}>
-                                <Download size={18} />
-                                내보내기
+                                <Download size={18} /> 내보내기
                             </button>
                         </div>
                     </div>
@@ -162,52 +171,48 @@ const Search = () => {
                         <thead>
                             <tr>
                                 <th className="col-check">
-                                    <input
-                                        type="checkbox"
-                                        checked={results.length > 0 && selectedItems.size === results.length}
-                                        onChange={toggleSelectAll}
-                                    />
+                                    <input type="checkbox" checked={results.length > 0 && selectedItems.size === results.length} onChange={toggleSelectAll} />
                                 </th>
-                                <th className="col-thumb">썸네일</th>
-                                <th className="col-info">영상 정보</th>
-                                <th className="col-channel">채널</th>
-                                <th className="col-date">업로드일</th>
+                                <th>No.</th>
+                                <th>썸네일</th>
+                                <th>제목 / 채널</th>
+                                <th>길이</th>
+                                <th>구독자</th>
+                                <th>조회수</th>
+                                <th>좋아요</th>
+                                <th>기여도</th>
+                                <th>성과도</th>
+                                <th>업로드일</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {results.map((item) => (
-                                <tr
-                                    key={item.id.videoId}
-                                    className={selectedItems.has(item.id.videoId) ? 'selected' : ''}
-                                    onClick={() => toggleSelect(item.id.videoId)}
-                                >
-                                    <td className="col-check" onClick={(e) => e.stopPropagation()}>
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedItems.has(item.id.videoId)}
-                                            onChange={() => toggleSelect(item.id.videoId)}
-                                        />
-                                    </td>
-                                    <td className="col-thumb">
-                                        <img src={item.snippet.thumbnails.medium.url} alt={item.snippet.title} />
-                                    </td>
-                                    <td className="col-info">
-                                        <div className="video-title">{item.snippet.title}</div>
-                                        <div className="video-desc">{item.snippet.description}</div>
-                                    </td>
-                                    <td className="col-channel">{item.snippet.channelTitle}</td>
-                                    <td className="col-date">
-                                        {new Date(item.snippet.publishedAt).toLocaleDateString()}
-                                    </td>
-                                </tr>
-                            ))}
-                            {!isLoading && results.length === 0 && (
-                                <tr>
-                                    <td colSpan={5} className="no-results">
-                                        검색 결과가 없습니다.
-                                    </td>
-                                </tr>
-                            )}
+                            {results.map((item, idx) => {
+                                const metrics = calculateMetrics(item);
+                                return (
+                                    <tr key={item.id.videoId} className={selectedItems.has(item.id.videoId) ? 'selected' : ''} onClick={() => toggleSelect(item.id.videoId)}>
+                                        <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                                            <input type="checkbox" checked={selectedItems.has(item.id.videoId)} onChange={() => toggleSelect(item.id.videoId)} />
+                                        </td>
+                                        <td>{idx + 1}</td>
+                                        <td className="col-thumb">
+                                            <img src={item.snippet.thumbnails.medium.url} alt="" />
+                                        </td>
+                                        <td>
+                                            <div className="video-title">{item.snippet.title}</div>
+                                            <div className="channel-name-small">{item.snippet.channelTitle}</div>
+                                        </td>
+                                        <td>{formatDuration(item.contentDetails.duration)}</td>
+                                        <td>{formatNumber(item.channelStatistics.subscriberCount)}</td>
+                                        <td>{formatNumber(item.statistics.viewCount)}</td>
+                                        <td>{formatNumber(item.statistics.likeCount)}</td>
+                                        <td>{metrics.contributionScore.toFixed(2)}%</td>
+                                        <td className={`perf-badge ${metrics.performanceRatio >= 1 ? 'high' : ''}`}>
+                                            x{metrics.performanceRatio.toFixed(1)}
+                                        </td>
+                                        <td>{new Date(item.snippet.publishedAt).toLocaleDateString()}</td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

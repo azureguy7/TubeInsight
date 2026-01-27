@@ -140,6 +140,19 @@
     align-items: center;
 }
 
+.col-metrics {
+    font-size: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    white-space: nowrap;
+}
+
+.metric-row.perf.high {
+    color: #ff4d4f;
+    font-weight: 700;
+}
+
 .tag-badge {
     background: rgba(62, 166, 255, 0.1);
     color: var(--accent-primary);

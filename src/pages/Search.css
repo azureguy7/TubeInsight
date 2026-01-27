@@ -200,6 +200,24 @@
     white-space: nowrap;
 }
 
+.channel-name-small {
+    font-size: 0.8rem;
+    color: var(--accent-primary);
+    margin-top: 0.2rem;
+}
+
+.perf-badge {
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.perf-badge.high {
+    color: #ff4d4f;
+    background: rgba(255, 77, 79, 0.1);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+}
+
 .no-results {
     text-align: center;
     padding: 4rem !important;

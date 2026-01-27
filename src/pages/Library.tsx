@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAppStore } from '../store/useAppStore';
+import { useAppStore, formatNumber, formatDuration } from '../store/useAppStore';
 import { Trash2, Download, Edit3, Tag as TagIcon, Search as SearchIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './Library.css';
@@ -26,11 +26,16 @@ const Library = () => {
         const dataToExport = library
             .filter(item => selectedItems.size === 0 || selectedItems.has(item.id))
             .map(item => ({
-                'ID': item.id,
+                'No': item.id,
                 '제목': item.title,
-                '채널': item.channelTitle,
-                '업로드일': new Date(item.publishedAt).toLocaleDateString(),
-                '보관일': new Date(item.savedAt).toLocaleDateString(),
+                '채널명': item.channelTitle,
+                '업로드 날짜': new Date(item.publishedAt).toLocaleDateString(),
+                '구독자수': item.subscriberCount,
+                '조회수': item.viewCount,
+                '좋아요 수': item.likeCount,
+                '영상 길이': formatDuration(item.duration),
+                '채널 기여도(%)': item.contributionScore.toFixed(2),
+                '성과도 배율': item.performanceRatio.toFixed(2),
                 '메모': item.note,
                 '태그': item.tags.join(', '),
                 '링크': `https://www.youtube.com/watch?v=${item.id}`
@@ -68,21 +73,11 @@ const Library = () => {
                         />
                     </div>
                     <div className="toolbar-actions">
-                        <button
-                            className="btn btn-secondary"
-                            disabled={library.length === 0}
-                            onClick={handleExport}
-                        >
-                            <Download size={18} />
-                            엑셀 내보내기
+                        <button className="btn btn-secondary" disabled={library.length === 0} onClick={handleExport}>
+                            <Download size={18} /> 엑셀 내보내기
                         </button>
-                        <button
-                            className="btn btn-danger"
-                            disabled={selectedItems.size === 0}
-                            onClick={handleDelete}
-                        >
-                            <Trash2 size={18} />
-                            선택 삭제
+                        <button className="btn btn-danger" disabled={selectedItems.size === 0} onClick={handleDelete}>
+                            <Trash2 size={18} /> 선택 삭제
                         </button>
                     </div>
                 </div>
@@ -102,69 +97,59 @@ const Library = () => {
                                     }}
                                 />
                             </th>
-                            <th className="col-thumb">썸네일</th>
-                            <th className="col-info">영상/메모</th>
-                            <th className="col-tags">태그</th>
-                            <th className="col-date">저장일</th>
+                            <th>No.</th>
+                            <th>썸네일</th>
+                            <th>채널 / 제목</th>
+                            <th>지표 (조회/구독/성과)</th>
+                            <th>메모/태그</th>
+                            <th>저장일</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredLibrary.map((item) => (
-                            <tr
-                                key={item.id}
-                                className={selectedItems.has(item.id) ? 'selected' : ''}
-                                onClick={() => toggleSelect(item.id)}
-                            >
+                        {filteredLibrary.map((item, idx) => (
+                            <tr key={item.id} className={selectedItems.has(item.id) ? 'selected' : ''} onClick={() => toggleSelect(item.id)}>
                                 <td className="col-check" onClick={(e) => e.stopPropagation()}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedItems.has(item.id)}
-                                        onChange={() => toggleSelect(item.id)}
-                                    />
+                                    <input type="checkbox" checked={selectedItems.has(item.id)} onChange={() => toggleSelect(item.id)} />
                                 </td>
+                                <td>{idx + 1}</td>
                                 <td className="col-thumb">
-                                    <img src={item.thumbnail} alt={item.title} />
+                                    <img src={item.thumbnail} alt="" />
                                 </td>
                                 <td className="col-info">
-                                    <div className="video-title">{item.title}</div>
                                     <div className="channel-name">{item.channelTitle}</div>
-                                    <div className="note-section" onClick={(e) => e.stopPropagation()}>
+                                    <div className="video-title-small">{item.title}</div>
+                                </td>
+                                <td className="col-metrics">
+                                    <div className="metric-row">조회: {formatNumber(item.viewCount)}</div>
+                                    <div className="metric-row">구독: {formatNumber(item.subscriberCount)}</div>
+                                    <div className="metric-row">기여: {item.contributionScore.toFixed(1)}%</div>
+                                    <div className={`metric-row perf ${item.performanceRatio >= 1 ? 'high' : ''}`}>
+                                        성과: x{item.performanceRatio.toFixed(1)}
+                                    </div>
+                                </td>
+                                <td className="col-meta" onClick={(e) => e.stopPropagation()}>
+                                    <div className="note-section">
                                         {editingId === item.id ? (
                                             <textarea
                                                 autoFocus
                                                 value={item.note}
                                                 onChange={(e) => updateLibraryItem(item.id, { note: e.target.value })}
                                                 onBlur={() => setEditingId(null)}
-                                                placeholder="메모를 입력하세요..."
                                             />
                                         ) : (
                                             <div className="note-text" onClick={() => setEditingId(item.id)}>
-                                                <Edit3 size={14} />
-                                                {item.note || '메모 추가...'}
+                                                <Edit3 size={12} /> {item.note || '메모...'}
                                             </div>
                                         )}
                                     </div>
-                                </td>
-                                <td className="col-tags">
                                     <div className="tags-list">
-                                        {item.tags.map(tag => (
-                                            <span key={tag} className="tag-badge">{tag}</span>
-                                        ))}
+                                        {item.tags.map(tag => <span key={tag} className="tag-badge">{tag}</span>)}
                                         <button className="add-tag-btn"><TagIcon size={12} /></button>
                                     </div>
                                 </td>
-                                <td className="col-date">
-                                    {new Date(item.savedAt).toLocaleDateString()}
-                                </td>
+                                <td className="col-date">{new Date(item.savedAt).toLocaleDateString()}</td>
                             </tr>
                         ))}
-                        {filteredLibrary.length === 0 && (
-                            <tr>
-                                <td colSpan={5} className="no-results">
-                                    {library.length === 0 ? '보관함이 비어 있습니다.' : '검색 결과가 없습니다.'}
-                                </td>
-                            </tr>
-                        )}
                     </tbody>
                 </table>
             </div>
