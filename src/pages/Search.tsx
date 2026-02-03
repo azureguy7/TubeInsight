@@ -22,7 +22,8 @@ const Search = () => {
         sortOrder = 'desc',
         minContribution = 0,
         minPerformance = 0,
-        resultsQuery = ''
+        resultsQuery = '',
+        nextPageTokens = {}
     } = searchState || {};
 
     // Enforce array types to prevent crashes from corrupted state
@@ -171,7 +172,6 @@ const Search = () => {
             }
         });
         return sorted;
-        return sorted;
     }, [results, resultsQuery, minContribution, minPerformance, sortKey, sortOrder]);
 
     // Duplicate logic for secondary results (simplified sort, same filters)
@@ -269,6 +269,8 @@ const Search = () => {
         setLoadingStatus('검색을 준비 중입니다...');
         setSearchState({
             results: [],
+            secondaryResults: [],
+            nextPageTokens: {},
             resultsQuery: ''
         });
         setSelectedItems(new Set());
@@ -289,16 +291,67 @@ const Search = () => {
             setSearchState({
                 results: data.items || [],
                 secondaryResults: data.secondaryItems || [],
+                nextPageTokens: data.nextPageTokens || {},
                 resultsQuery: '',
             });
-
-            if ((!data.items || data.items.length === 0) && (!data.secondaryItems || data.secondaryItems.length === 0)) {
-                alert('검색 결과가 없습니다.');
-            }
         } catch (error: any) {
             console.error('Search main error:', error);
             const msg = error.response?.data?.error?.message || '검색 중 오류가 발생했습니다.';
             alert(`${msg} (API 할당량 초과 여부를 확인해 주세요)`);
+        } finally {
+            setIsLoading(false);
+            setLoadingStatus('');
+        }
+    };
+
+    const handleLoadMore = async () => {
+        if (!isValidated || !query || isLoading) return;
+
+        setIsLoading(true);
+        setLoadingStatus('추가 검색 결과를 불러오는 중입니다...');
+
+        try {
+            const commonParams: any = {};
+            if (publishedAfter) {
+                const date = new Date(publishedAfter);
+                if (!isNaN(date.getTime())) {
+                    commonParams.publishedAfter = date.toISOString();
+                }
+            }
+            if (duration !== 'any') commonParams.videoDuration = duration;
+
+            // Pass current nextPageTokens to fetch next page
+            const data = await youtubeService.searchMultiRegion(apiKey, query, selectedRegions, commonParams, nextPageTokens);
+
+            // Deduplication Logic
+            const existingIds = new Set([
+                ...(results || []).map(i => i.id?.videoId || i.id),
+                ...(secondaryResults || []).map(i => i.id?.videoId || i.id)
+            ]);
+
+            const newItems = (data.items || []).filter((item: any) => {
+                const id = item.id?.videoId || item.id;
+                return id && !existingIds.has(id);
+            });
+
+            const newSecondaryItems = (data.secondaryItems || []).filter((item: any) => {
+                const id = item.id?.videoId || item.id;
+                return id && !existingIds.has(id);
+            });
+
+            setSearchState({
+                results: [...(results || []), ...newItems],
+                secondaryResults: [...(secondaryResults || []), ...newSecondaryItems],
+                nextPageTokens: data.nextPageTokens || {}, // Update tokens for NEXT load
+            });
+
+            if (newItems.length === 0 && newSecondaryItems.length === 0) {
+                alert('추가로 불러올 새로운 영상이 없습니다.');
+            }
+
+        } catch (error: any) {
+            console.error('Load more error:', error);
+            alert('추가 결과를 불러오는 중 오류가 발생했습니다.');
         } finally {
             setIsLoading(false);
             setLoadingStatus('');
@@ -729,6 +782,18 @@ const Search = () => {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    )}
+                    {/* Load More Button */}
+                    {Object.keys(nextPageTokens || {}).length > 0 && !isLoading && (
+                        <div className="load-more-container" style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem', marginBottom: '2rem' }}>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={handleLoadMore}
+                                style={{ padding: '0.8rem 2rem', fontSize: '1rem' }}
+                            >
+                                펼치기 (Load More)
+                            </button>
                         </div>
                     )}
                 </div>

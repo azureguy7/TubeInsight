@@ -101,7 +101,7 @@ export const youtubeService = {
                 part: 'snippet',
                 type: 'video',
                 q: query,
-                maxResults: 20,
+                maxResults: 50,
                 ...params,
             },
         });
@@ -109,10 +109,11 @@ export const youtubeService = {
     },
 
     // 2. Optimized Multi-Region Search
-    searchMultiRegion: async (apiKey: string, query: string, selectedRegions: string[], commonParams: any = {}) => {
+    searchMultiRegion: async (apiKey: string, query: string, selectedRegions: string[], commonParams: any = {}, pageTokens: Record<string, string> = {}) => {
         try {
             const allItems: any[] = [];
             const seenVideoIds = new Set<string>();
+            const nextPageTokens: Record<string, string> = {};
 
             // Phase 1: Parallel Region Search (Minimal payload)
             // If no regions, default to 'global' (empty regionCode)
@@ -120,13 +121,27 @@ export const youtubeService = {
 
             const regionRequests = regionsToSearch.map(regionCode => {
                 const targetLang = REGION_LANGUAGE_MAP[regionCode] || 'en'; // Default to English if unknown
+                const pageToken = pageTokens[regionCode];
+
+                // If we have a token for this region but it's null/undefined (end of list), skip it
+                // But initially pageTokens is {}, so undefined means "start from fresh"
+                if (pageTokens && Object.keys(pageTokens).length > 0 && !pageToken) {
+                    // If we provided tokens map but this region has no token, it implies we reached end for this region?
+                    // Or maybe we just haven't searched it yet?
+                    // Let's assume if the key exists and is null, it's done.
+                    if (regionCode in pageTokens && !pageTokens[regionCode]) return Promise.resolve(null);
+                }
 
                 const searchParams = regionCode
-                    ? { ...commonParams, regionCode, relevanceLanguage: targetLang, maxResults: 50 }
-                    : { ...commonParams, maxResults: 50 };
+                    ? { ...commonParams, regionCode, relevanceLanguage: targetLang, maxResults: 50, pageToken }
+                    : { ...commonParams, maxResults: 50, pageToken };
+
                 return youtubeService.searchVideosBasic(apiKey, query, searchParams)
                     .then(data => {
                         const items = data?.items || [];
+                        if (data?.nextPageToken) {
+                            nextPageTokens[regionCode] = data.nextPageToken;
+                        }
                         return items.map((item: any) => ({ ...item, _searchRegion: regionCode || 'GL' }));
                     })
                     .catch(err => {
@@ -136,7 +151,7 @@ export const youtubeService = {
             });
 
             const resultsByRegion = await Promise.all(regionRequests);
-            const flatResults = resultsByRegion.flat();
+            const flatResults = resultsByRegion.filter(r => r !== null).flat();
 
             // Deduplicate and collect IDs
             flatResults.forEach((item: any) => {
@@ -147,7 +162,7 @@ export const youtubeService = {
                 }
             });
 
-            if (allItems.length === 0) return { items: [] };
+            if (allItems.length === 0) return { items: [], secondaryItems: [], nextPageTokens };
 
             // Phase 2: Bulk Detail Fetching (50 at a time)
             const videoIdsArr = allItems.map(item => item.id?.videoId || item.id);
@@ -255,7 +270,7 @@ export const youtubeService = {
                 return acc;
             }, { items: [], secondaryItems: [] });
 
-            return { items: finalItems.items, secondaryItems: finalItems.secondaryItems };
+            return { items: finalItems.items, secondaryItems: finalItems.secondaryItems, nextPageTokens };
         } catch (error) {
             console.error('Multi-Region Search Error:', error);
             throw error;

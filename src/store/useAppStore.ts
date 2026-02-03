@@ -42,6 +42,7 @@ interface AppState {
         query: string;
         results: any[];
         secondaryResults: any[];
+        nextPageTokens: Record<string, string>; // Map regionCode -> pageToken
         selectedRegions: string[];
         publishedAfter: string;
         duration: string;
@@ -82,6 +83,7 @@ export const useAppStore = create<AppState>()(
                 query: '',
                 results: [],
                 secondaryResults: [],
+                nextPageTokens: {},
                 selectedRegions: ['KR'],
                 publishedAfter: '',
                 duration: 'any',
