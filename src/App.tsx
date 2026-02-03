@@ -8,6 +8,7 @@ import Home from './pages/Home';
 import Search from './pages/Search';
 import Library from './pages/Library';
 import Settings from './pages/Settings';
+import ErrorBoundary from './components/ErrorBoundary';
 import './styles/global.css';
 
 function App() {
@@ -37,7 +38,11 @@ function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/search" element={<Search />} />
+            <Route path="/search" element={
+              <ErrorBoundary>
+                <Search />
+              </ErrorBoundary>
+            } />
             <Route path="/library" element={<Library />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

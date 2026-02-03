@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore, formatNumber, formatDuration, type SavedItem } from '../store/useAppStore';
-import { Trash2, Download, Edit3, Tag as TagIcon, Search as SearchIcon } from 'lucide-react';
+import { Trash2, Download, Edit3, Tag as TagIcon, Search as SearchIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { dbService } from '../services/dbService';
 import './Library.css';
@@ -11,10 +11,82 @@ const Library = () => {
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const filteredLibrary = library.filter((item: SavedItem) =>
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.channelTitle.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Sorting
+    const [sortKey, setSortKey] = useState<string>('savedAt');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+    const parseDurationToSeconds = (durationStr: string): number => {
+        const match = durationStr.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+        if (!match) return 0;
+        const hours = parseInt(match[1] || '0', 10);
+        const minutes = parseInt(match[2] || '0', 10);
+        const seconds = parseInt(match[3] || '0', 10);
+        return hours * 3600 + minutes * 60 + seconds;
+    };
+
+    const handleSort = (key: string) => {
+        if (sortKey === key) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortKey(key);
+            setSortOrder('desc');
+        }
+    };
+
+    const sortedLibrary = [...library]
+        .filter((item: SavedItem) =>
+            item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.channelTitle.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        .sort((a, b) => {
+            let valA: any;
+            let valB: any;
+
+            switch (sortKey) {
+                case 'title':
+                    valA = a.title.toLowerCase();
+                    valB = b.title.toLowerCase();
+                    break;
+                case 'duration':
+                    valA = parseDurationToSeconds(a.duration);
+                    valB = parseDurationToSeconds(b.duration);
+                    break;
+                case 'subscribers':
+                    valA = parseInt(a.subscriberCount || '0', 10);
+                    valB = parseInt(b.subscriberCount || '0', 10);
+                    break;
+                case 'views':
+                    valA = parseInt(a.viewCount || '0', 10);
+                    valB = parseInt(b.viewCount || '0', 10);
+                    break;
+                case 'likes':
+                    valA = parseInt(a.likeCount || '0', 10);
+                    valB = parseInt(b.likeCount || '0', 10);
+                    break;
+                case 'contribution':
+                    valA = a.contributionScore || 0;
+                    valB = b.contributionScore || 0;
+                    break;
+                case 'performance':
+                    valA = a.performanceRatio || 0;
+                    valB = b.performanceRatio || 0;
+                    break;
+                case 'publishedAt':
+                    valA = new Date(a.publishedAt).getTime();
+                    valB = new Date(b.publishedAt).getTime();
+                    break;
+                case 'savedAt':
+                    valA = new Date(a.savedAt).getTime();
+                    valB = new Date(b.savedAt).getTime();
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+            if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
 
     const handleDelete = async () => {
         if (window.confirm(`${selectedItems.size}개의 항목을 삭제하시겠습니까?`)) {
@@ -44,7 +116,7 @@ const Library = () => {
     };
 
     const handleExport = () => {
-        const dataToExport = library
+        const dataToExport = sortedLibrary
             .filter(item => selectedItems.size === 0 || selectedItems.has(item.id))
             .map(item => ({
                 'No': item.id,
@@ -59,7 +131,8 @@ const Library = () => {
                 '성과도 배율': (item.performanceRatio || 0).toFixed(2),
                 '메모': item.note,
                 '태그': item.tags.join(', '),
-                '링크': `https://www.youtube.com/watch?v=${item.id}`
+                '링크': `https://www.youtube.com/watch?v=${item.id}`,
+                '저장일': new Date(item.savedAt).toLocaleDateString()
             }));
 
         const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -111,23 +184,44 @@ const Library = () => {
                             <th className="col-check">
                                 <input
                                     type="checkbox"
-                                    checked={filteredLibrary.length > 0 && selectedItems.size === filteredLibrary.length}
+                                    checked={sortedLibrary.length > 0 && selectedItems.size === sortedLibrary.length}
                                     onChange={() => {
-                                        if (selectedItems.size === filteredLibrary.length) setSelectedItems(new Set());
-                                        else setSelectedItems(new Set(filteredLibrary.map(i => i.id)));
+                                        if (selectedItems.size === sortedLibrary.length) setSelectedItems(new Set());
+                                        else setSelectedItems(new Set(sortedLibrary.map(i => i.id)));
                                     }}
                                 />
                             </th>
                             <th>No.</th>
                             <th>썸네일</th>
-                            <th>채널 / 제목</th>
-                            <th>지표 (조회/구독/성과)</th>
-                            <th>메모/태그</th>
-                            <th>저장일</th>
+                            <th className="sortable-header" onClick={() => handleSort('title')}>
+                                제목 / 채널 {sortKey === 'title' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                            </th>
+                            <th className="sortable-header" onClick={() => handleSort('duration')}>
+                                길이 {sortKey === 'duration' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                            </th>
+                            <th className="sortable-header" onClick={() => handleSort('subscribers')}>
+                                구독자 {sortKey === 'subscribers' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                            </th>
+                            <th className="sortable-header" onClick={() => handleSort('views')}>
+                                조회수 {sortKey === 'views' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                            </th>
+                            <th className="sortable-header" onClick={() => handleSort('likes')}>
+                                좋아요 {sortKey === 'likes' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                            </th>
+                            <th className="sortable-header" onClick={() => handleSort('contribution')}>
+                                기여도 {sortKey === 'contribution' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                            </th>
+                            <th className="sortable-header" onClick={() => handleSort('performance')}>
+                                성과도 {sortKey === 'performance' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                            </th>
+                            <th className="sortable-header" onClick={() => handleSort('publishedAt')}>
+                                업로드일 {sortKey === 'publishedAt' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                            </th>
+                            <th>메모 / 태그</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredLibrary.map((item, idx) => (
+                        {sortedLibrary.map((item, idx) => (
                             <tr key={item.id} className={selectedItems.has(item.id) ? 'selected' : ''} onClick={() => toggleSelect(item.id)}>
                                 <td className="col-check" onClick={(e) => e.stopPropagation()}>
                                     <input type="checkbox" checked={selectedItems.has(item.id)} onChange={() => toggleSelect(item.id)} />
@@ -138,22 +232,23 @@ const Library = () => {
                                         <img src={item.thumbnail} alt="" />
                                     </a>
                                 </td>
-                                <td className="col-info">
-                                    <a href={`https://www.youtube.com/channel/${item.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
-                                        <div className="channel-name">{item.channelTitle}</div>
-                                    </a>
+                                <td>
                                     <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="video-link">
                                         <div className="video-title-small">{item.title}</div>
                                     </a>
+                                    <a href={`https://www.youtube.com/channel/${item.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
+                                        <div className="channel-name-small">{item.channelTitle}</div>
+                                    </a>
                                 </td>
-                                <td className="col-metrics">
-                                    <div className="metric-row">조회: {formatNumber(item.viewCount || '0')}</div>
-                                    <div className="metric-row">구독: {formatNumber(item.subscriberCount || '0')}</div>
-                                    <div className="metric-row">기여: {(item.contributionScore || 0).toFixed(1)}%</div>
-                                    <div className={`metric-row perf ${(item.performanceRatio || 0) >= 1 ? 'high' : ''}`}>
-                                        성과: x{(item.performanceRatio || 0).toFixed(1)}
-                                    </div>
+                                <td>{formatDuration(item.duration)}</td>
+                                <td>{formatNumber(item.subscriberCount || '0')}</td>
+                                <td>{formatNumber(item.viewCount || '0')}</td>
+                                <td>{formatNumber(item.likeCount || '0')}</td>
+                                <td>{(item.contributionScore || 0).toFixed(2)}%</td>
+                                <td className={`perf-badge ${(item.performanceRatio || 0) >= 1 ? 'high' : ''}`}>
+                                    x{(item.performanceRatio || 0).toFixed(1)}
                                 </td>
+                                <td>{new Date(item.publishedAt).toLocaleDateString()}</td>
                                 <td className="col-meta" onClick={(e) => e.stopPropagation()}>
                                     <div className="note-section">
                                         {editingId === item.id ? (
@@ -175,14 +270,16 @@ const Library = () => {
                                             className="add-tag-btn"
                                             onClick={() => {
                                                 const tag = prompt('태그를 입력하세요:');
-                                                if (tag) handleUpdateItem(item.id, { tags: [...item.tags, tag] });
+                                                if (tag) {
+                                                    const currentTags = Array.isArray(item.tags) ? item.tags : [];
+                                                    handleUpdateItem(item.id, { tags: [...currentTags, tag] });
+                                                }
                                             }}
                                         >
                                             <TagIcon size={12} />
                                         </button>
                                     </div>
                                 </td>
-                                <td className="col-date">{new Date(item.savedAt).toLocaleDateString()}</td>
                             </tr>
                         ))}
                     </tbody>

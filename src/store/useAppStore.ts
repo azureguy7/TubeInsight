@@ -37,6 +37,20 @@ interface AppState {
     setUser: (user: any) => void;
     session: any | null;
     setSession: (session: any) => void;
+    // Search Persistence States
+    searchState: {
+        query: string;
+        results: any[];
+        selectedRegions: string[];
+        publishedAfter: string;
+        duration: string;
+        sortKey: string;
+        sortOrder: 'asc' | 'desc';
+        minContribution: number;
+        minPerformance: number;
+        resultsQuery: string;
+    };
+    setSearchState: (updates: Partial<AppState['searchState']>) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -63,9 +77,46 @@ export const useAppStore = create<AppState>()(
             setUser: (user) => set({ user }),
             session: null,
             setSession: (session) => set({ session }),
+            searchState: {
+                query: '',
+                results: [],
+                selectedRegions: ['KR'],
+                publishedAfter: '',
+                duration: 'any',
+                sortKey: 'publishedAt',
+                sortOrder: 'desc',
+                minContribution: 0,
+                minPerformance: 0,
+                resultsQuery: '',
+            },
+            setSearchState: (updates) => set((state) => ({
+                searchState: { ...(state.searchState || {}), ...updates }
+            })),
         }),
         {
             name: 'tube-insight-storage',
+            version: 1,
+            migrate: (persistedState: any, version: number) => {
+                if (version === 0) {
+                    // Force reset search state if it's from an older or potentially broken version
+                    return {
+                        ...persistedState,
+                        searchState: {
+                            query: '',
+                            results: [],
+                            selectedRegions: ['KR'],
+                            publishedAfter: '',
+                            duration: 'any',
+                            sortKey: 'publishedAt',
+                            sortOrder: 'desc',
+                            minContribution: 0,
+                            minPerformance: 0,
+                            resultsQuery: '',
+                        }
+                    };
+                }
+                return persistedState;
+            }
         }
     )
 );

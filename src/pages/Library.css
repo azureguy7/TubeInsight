@@ -74,70 +74,51 @@
     color: var(--text-secondary);
     font-size: 0.85rem;
     font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .library-table td {
-    padding: 1.2rem 1rem;
+    padding: 1rem;
     border-bottom: 1px solid var(--border-color);
-    vertical-align: top;
+    vertical-align: middle;
 }
 
 .library-table tr {
     transition: var(--transition-smooth);
+    cursor: pointer;
 }
 
 .library-table tr:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .library-table tr.selected {
     background: rgba(62, 166, 255, 0.05);
 }
 
-.channel-name {
-    font-size: 0.85rem;
+.col-meta {
+    min-width: 250px;
+    vertical-align: top !important;
+}
+
+.tag-badge {
+    background: rgba(62, 166, 255, 0.1);
     color: var(--accent-primary);
-    margin-bottom: 0.8rem;
-}
-
-.note-section {
-    margin-top: 0.5rem;
-}
-
-.note-text {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    cursor: pointer;
-    padding: 0.4rem;
+    padding: 0.2rem 0.6rem;
     border-radius: 4px;
-}
-
-.note-text:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-primary);
-}
-
-.note-section textarea {
-    width: 100%;
-    background: var(--bg-primary);
-    border: 1px solid var(--accent-primary);
-    color: var(--text-primary);
-    padding: 0.6rem;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    font-family: inherit;
-    resize: vertical;
-    min-height: 60px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-bottom: 0.2rem;
 }
 
 .tags-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.3rem;
     align-items: center;
+    margin-top: 0.5rem;
 }
 
 .video-link,
@@ -164,18 +145,35 @@
     white-space: nowrap;
 }
 
-.metric-row.perf.high {
-    color: #ff4d4f;
-    font-weight: 700;
+.perf-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.05);
 }
 
-.tag-badge {
-    background: rgba(62, 166, 255, 0.1);
+.perf-badge.high {
+    background: rgba(255, 77, 79, 0.1);
+    color: #ff4d4f;
+}
+
+.sortable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: var(--transition-smooth);
+    white-space: nowrap;
+}
+
+.sortable-header:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
     color: var(--accent-primary);
-    padding: 0.2rem 0.6rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 500;
+}
+
+.sortable-header svg {
+    margin-left: 4px;
+    vertical-align: middle;
+    display: inline-block;
 }
 
 .add-tag-btn {
