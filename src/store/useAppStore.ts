@@ -41,6 +41,7 @@ interface AppState {
     searchState: {
         query: string;
         results: any[];
+        secondaryResults: any[];
         selectedRegions: string[];
         publishedAfter: string;
         duration: string;
@@ -80,6 +81,7 @@ export const useAppStore = create<AppState>()(
             searchState: {
                 query: '',
                 results: [],
+                secondaryResults: [],
                 selectedRegions: ['KR'],
                 publishedAfter: '',
                 duration: 'any',
@@ -104,6 +106,7 @@ export const useAppStore = create<AppState>()(
                         searchState: {
                             query: '',
                             results: [],
+                            secondaryResults: [],
                             selectedRegions: ['KR'],
                             publishedAfter: '',
                             duration: 'any',

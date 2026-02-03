@@ -14,6 +14,7 @@ const Search = () => {
     const {
         query = '',
         results: _results = [],
+        secondaryResults: _secondaryResults = [],
         selectedRegions: _selectedRegions = ['KR'],
         publishedAfter = '',
         duration = 'any',
@@ -26,6 +27,7 @@ const Search = () => {
 
     // Enforce array types to prevent crashes from corrupted state
     const results = Array.isArray(_results) ? _results : [];
+    const secondaryResults = Array.isArray(_secondaryResults) ? _secondaryResults : [];
     const selectedRegions = Array.isArray(_selectedRegions) ? _selectedRegions : ['KR'];
 
     const [isLoading, setIsLoading] = useState(false);
@@ -169,7 +171,77 @@ const Search = () => {
             }
         });
         return sorted;
+        return sorted;
     }, [results, resultsQuery, minContribution, minPerformance, sortKey, sortOrder]);
+
+    // Duplicate logic for secondary results (simplified sort, same filters)
+    const filteredSecondaryResults = useMemo(() => {
+        const baseResults = secondaryResults || [];
+        const resultsWithMetrics = baseResults.map(item => ({
+            ...item,
+            _computedMetrics: calculateMetrics(item)
+        }));
+
+        const filtered = resultsWithMetrics.filter(item => {
+            const metrics = item._computedMetrics;
+            const title = item.snippet?.title || '';
+            const channel = item.snippet?.channelTitle || '';
+            const matchesQuery = !resultsQuery ||
+                title.toLowerCase().includes(resultsQuery.toLowerCase()) ||
+                channel.toLowerCase().includes(resultsQuery.toLowerCase());
+            const matchesContribution = metrics.contributionScore >= minContribution;
+            const matchesPerformance = metrics.performanceRatio >= minPerformance;
+            return matchesQuery && matchesContribution && matchesPerformance;
+        });
+
+        // Sort same as primary
+        return [...filtered].sort((a, b) => {
+            // Reuse exact sort logic or simplified
+            let valA: any;
+            let valB: any;
+            try {
+                switch (sortKey) {
+                    case 'title':
+                        valA = (a.snippet?.title || '').toLowerCase();
+                        valB = (b.snippet?.title || '').toLowerCase();
+                        break;
+                    case 'duration':
+                        valA = parseDurationToSeconds(a.contentDetails?.duration || '');
+                        valB = parseDurationToSeconds(b.contentDetails?.duration || '');
+                        break;
+                    case 'subscribers':
+                        valA = parseInt(String(a.channelStatistics?.subscriberCount || '0'), 10) || 0;
+                        valB = parseInt(String(b.channelStatistics?.subscriberCount || '0'), 10) || 0;
+                        break;
+                    case 'views':
+                        valA = parseInt(String(a.statistics?.viewCount || '0'), 10) || 0;
+                        valB = parseInt(String(b.statistics?.viewCount || '0'), 10) || 0;
+                        break;
+                    case 'likes':
+                        valA = parseInt(String(a.statistics?.likeCount || '0'), 10) || 0;
+                        valB = parseInt(String(b.statistics?.likeCount || '0'), 10) || 0;
+                        break;
+                    case 'contribution':
+                        valA = a._computedMetrics.contributionScore;
+                        valB = b._computedMetrics.contributionScore;
+                        break;
+                    case 'performance':
+                        valA = a._computedMetrics.performanceRatio;
+                        valB = b._computedMetrics.performanceRatio;
+                        break;
+                    case 'publishedAt':
+                        valA = new Date(a.snippet?.publishedAt || 0).getTime();
+                        valB = new Date(b.snippet?.publishedAt || 0).getTime();
+                        break;
+                    default:
+                        return 0;
+                }
+                if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+                if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+                return 0;
+            } catch (error) { return 0; }
+        });
+    }, [secondaryResults, resultsQuery, minContribution, minPerformance, sortKey, sortOrder]);
 
     const toggleAllRegions = (select: boolean) => {
         if (select) setSearchState({ selectedRegions: (regions || []).map(r => r.id) });
@@ -216,10 +288,11 @@ const Search = () => {
 
             setSearchState({
                 results: data.items || [],
+                secondaryResults: data.secondaryItems || [],
                 resultsQuery: '',
             });
 
-            if (!data.items || data.items.length === 0) {
+            if ((!data.items || data.items.length === 0) && (!data.secondaryItems || data.secondaryItems.length === 0)) {
                 alert('검색 결과가 없습니다.');
             }
         } catch (error: any) {
@@ -573,6 +646,91 @@ const Search = () => {
                             })}
                         </tbody>
                     </table>
+
+                    {/* Primary Empty State */}
+                    {(filteredResults || []).length === 0 && (
+                        <div className="no-results" style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                            <p style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>선택한 국가/언어 ({selectedRegions.join(', ')}) 조건에 맞는 영상이 없습니다.</p>
+                            <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>아래의 다른 언어/지역 검색 결과를 확인해보세요.</p>
+                        </div>
+                    )}
+
+
+                    {/* Secondary Results Section (Other Languages) */}
+                    {(filteredSecondaryResults || []).length > 0 && (
+                        <div className="secondary-results-section" style={{ marginTop: '3rem', opacity: 0.85, paddingBottom: '2rem' }}>
+                            <div className="secondary-header" style={{ marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
+                                <h4 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '0.9em' }}>▼</span> 다른 언어/지역 검색 결과 ({(filteredSecondaryResults || []).length})
+                                </h4>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginLeft: '1.5rem' }}>
+                                    선택한 국가({selectedRegions.join(', ')})의 언어와 일치하지 않을 수 있는 영상들입니다.
+                                </p>
+                            </div>
+                            <div className="secondary-container">
+                                <table className="results-table secondary-table">
+                                    <thead>
+                                        <tr>
+                                            <th className="col-check"></th>
+                                            <th>No.</th>
+                                            <th>썸네일</th>
+                                            <th>제목 / 채널</th>
+                                            <th>길이</th>
+                                            <th>구독자</th>
+                                            <th>조회수</th>
+                                            <th>좋아요</th>
+                                            <th>기여도</th>
+                                            <th>성과도</th>
+                                            <th>업로드일</th>
+                                            <th>국가</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(filteredSecondaryResults || []).map((item, idx) => {
+                                            if (!item) return null;
+                                            const metrics = calculateMetrics(item);
+                                            const videoId = item.id?.videoId || item.id;
+                                            if (!videoId) return null;
+
+                                            return (
+                                                <tr key={videoId} className={selectedItems.has(videoId) ? 'selected' : ''} onClick={() => toggleSelect(videoId)}>
+                                                    <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                                                        <input type="checkbox" checked={selectedItems.has(videoId)} onChange={() => toggleSelect(videoId)} />
+                                                    </td>
+                                                    <td>{idx + 1}</td>
+                                                    <td className="col-thumb">
+                                                        <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer">
+                                                            <img src={item.snippet?.thumbnails?.medium?.url} alt="" />
+                                                        </a>
+                                                    </td>
+                                                    <td>
+                                                        <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer" className="video-link">
+                                                            <div className="video-title">{item.snippet?.title}</div>
+                                                        </a>
+                                                        <a href={`https://www.youtube.com/channel/${item.snippet?.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
+                                                            <div className="channel-name-small">{item.snippet?.channelTitle}</div>
+                                                        </a>
+                                                    </td>
+                                                    <td>{formatDuration(item.contentDetails?.duration || '')}</td>
+                                                    <td>{formatNumber(item.channelStatistics?.subscriberCount || '0')}</td>
+                                                    <td>{formatNumber(item.statistics?.viewCount || '0')}</td>
+                                                    <td>{formatNumber(item.statistics?.likeCount || '0')}</td>
+                                                    <td>{(metrics.contributionScore || 0).toFixed(2)}%</td>
+                                                    <td className={`perf-badge ${(metrics.performanceRatio || 0) >= 1 ? 'high' : ''}`}>
+                                                        x{(metrics.performanceRatio || 0).toFixed(1)}
+                                                    </td>
+                                                    <td>{item.snippet?.publishedAt ? new Date(item.snippet.publishedAt).toLocaleDateString() : '-'}</td>
+                                                    <td>
+                                                        <span className="region-badge">{item.searchRegion || 'GL'}</span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </main>
         </div>
