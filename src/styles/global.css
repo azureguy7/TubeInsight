@@ -65,3 +65,81 @@ input {
 ::-webkit-scrollbar-thumb:hover {
   background: #444;
 }
+
+/* Tooltip System */
+.tooltip-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: help;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.tooltip-icon {
+  color: var(--text-secondary);
+  opacity: 0.5;
+  transition: var(--transition-smooth);
+}
+
+.tooltip-container:hover .tooltip-icon {
+  color: var(--accent-primary);
+  opacity: 1;
+}
+
+.tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  width: 280px;
+  background-color: #1a1a1a;
+  color: #fff;
+  text-align: center;
+  border-radius: 8px;
+  padding: 12px 16px;
+  position: absolute;
+  z-index: 10000;
+  top: 150%;
+  /* Position below the header */
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.5;
+  pointer-events: none;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.9), 0 0 10px rgba(62, 166, 255, 0.2);
+  border: 1px solid var(--accent-primary);
+  white-space: pre-wrap;
+}
+
+.tooltip-text::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  /* Arrow on top of the box */
+  left: 50%;
+  margin-left: -6px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: transparent transparent #1a1a1a transparent;
+}
+
+.tooltip-container:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.sortable-header {
+  vertical-align: middle !important;
+  padding: 12px 8px !important;
+  white-space: nowrap;
+  overflow: visible !important;
+  /* Crucial for tooltips to show */
+}
+
+.header-label {
+  font-weight: 600;
+  vertical-align: middle;
+}

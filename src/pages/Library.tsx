@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore, formatNumber, formatDuration, type SavedItem } from '../store/useAppStore';
-import { Trash2, Download, Edit3, Tag as TagIcon, Search as SearchIcon, ChevronUp, ChevronDown } from 'lucide-react';
+import { Trash2, Download, Edit3, Tag as TagIcon, Search as SearchIcon, ChevronUp, ChevronDown, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { dbService } from '../services/dbService';
 import './Library.css';
@@ -10,6 +10,8 @@ const Library = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [isSecondaryExpanded, setIsSecondaryExpanded] = useState(true);
+    const [selectedKeyword, setSelectedKeyword] = useState<string>('all');
 
     // Sorting
     const [sortKey, setSortKey] = useState<string>('savedAt');
@@ -34,10 +36,12 @@ const Library = () => {
     };
 
     const sortedLibrary = [...library]
-        .filter((item: SavedItem) =>
-            item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.channelTitle.toLowerCase().includes(searchQuery.toLowerCase())
-        )
+        .filter((item: SavedItem) => {
+            const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                item.channelTitle.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesKeyword = selectedKeyword === 'all' || item.searchQuery === selectedKeyword;
+            return matchesSearch && matchesKeyword;
+        })
         .sort((a, b) => {
             let valA: any;
             let valB: any;
@@ -87,6 +91,12 @@ const Library = () => {
             if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
             return 0;
         });
+
+    const primaryItems = sortedLibrary.filter(item => !item.isSecondary);
+    const secondaryItems = sortedLibrary.filter(item => item.isSecondary);
+
+    // Extract unique keywords for filter
+    const uniqueKeywords = Array.from(new Set(library.map(item => item.searchQuery).filter(Boolean))) as string[];
 
     const handleDelete = async () => {
         if (window.confirm(`${selectedItems.size}개의 항목을 삭제하시겠습니까?`)) {
@@ -166,6 +176,28 @@ const Library = () => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
+
+                    <div className="keyword-filter-box" style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '15px' }}>
+                        <TagIcon size={16} />
+                        <select
+                            value={selectedKeyword}
+                            onChange={(e) => setSelectedKeyword(e.target.value)}
+                            style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-secondary)',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                fontSize: '0.9rem'
+                            }}
+                        >
+                            <option value="all">전체 키워드보기</option>
+                            {uniqueKeywords.map(kw => (
+                                <option key={kw} value={kw}>{kw}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="toolbar-actions">
                         <button className="btn btn-secondary" disabled={library.length === 0} onClick={handleExport}>
                             <Download size={18} /> 엑셀 내보내기
@@ -209,10 +241,20 @@ const Library = () => {
                                 좋아요 {sortKey === 'likes' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                             </th>
                             <th className="sortable-header" onClick={() => handleSort('contribution')}>
-                                기여도 {sortKey === 'contribution' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                <span className="header-label">기여도</span>
+                                <div className="tooltip-container">
+                                    <HelpCircle size={14} className="tooltip-icon" />
+                                    <div className="tooltip-text">영상 조회수 / 채널 전체 조회수 (%)</div>
+                                </div>
+                                {sortKey === 'contribution' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                             </th>
                             <th className="sortable-header" onClick={() => handleSort('performance')}>
-                                성과도 {sortKey === 'performance' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                <span className="header-label">성과도</span>
+                                <div className="tooltip-container">
+                                    <HelpCircle size={14} className="tooltip-icon" />
+                                    <div className="tooltip-text">조회수 / 구독자 수</div>
+                                </div>
+                                {sortKey === 'performance' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                             </th>
                             <th className="sortable-header" onClick={() => handleSort('publishedAt')}>
                                 업로드일 {sortKey === 'publishedAt' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
@@ -221,24 +263,112 @@ const Library = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {sortedLibrary.map((item, idx) => (
-                            <tr key={item.id} className={selectedItems.has(item.id) ? 'selected' : ''} onClick={() => toggleSelect(item.id)}>
+                        {/* Primary Items */}
+                        {primaryItems.length > 0 ? (
+                            primaryItems.map((item, idx) => (
+                                <tr key={item.id} className={selectedItems.has(item.id) ? 'selected' : ''} onClick={() => toggleSelect(item.id)}>
+                                    <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                                        <input type="checkbox" checked={selectedItems.has(item.id)} onChange={() => toggleSelect(item.id)} />
+                                    </td>
+                                    <td>{idx + 1}</td>
+                                    <td className="col-thumb">
+                                        <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer">
+                                            <img src={item.thumbnail} alt="" />
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="video-link">
+                                            <div className="video-title-small">{item.title}</div>
+                                        </a>
+                                        <a href={`https://www.youtube.com/channel/${item.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
+                                            <div className="channel-name-small">{item.channelTitle}</div>
+                                        </a>
+                                    </td>
+                                    <td>{formatDuration(item.duration)}</td>
+                                    <td>{formatNumber(item.subscriberCount || '0')}</td>
+                                    <td>{formatNumber(item.viewCount || '0')}</td>
+                                    <td>{formatNumber(item.likeCount || '0')}</td>
+                                    <td>{(item.contributionScore || 0).toFixed(2)}%</td>
+                                    <td className={`perf-badge ${(item.performanceRatio || 0) >= 1 ? 'high' : ''}`}>
+                                        x{(item.performanceRatio || 0).toFixed(1)}
+                                    </td>
+                                    <td>{new Date(item.publishedAt).toLocaleDateString()}</td>
+                                    <td className="col-meta" onClick={(e) => e.stopPropagation()}>
+                                        <div className="note-section">
+                                            {editingId === item.id ? (
+                                                <textarea
+                                                    autoFocus
+                                                    value={item.note}
+                                                    onChange={(e) => handleUpdateItem(item.id, { note: e.target.value })}
+                                                    onBlur={() => setEditingId(null)}
+                                                />
+                                            ) : (
+                                                <div className="note-text" onClick={() => setEditingId(item.id)}>
+                                                    <Edit3 size={12} /> {item.note || '메모...'}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="tags-list">
+                                            {item.tags.map(tag => <span key={tag} className="tag-badge">{tag}</span>)}
+                                            <button
+                                                className="add-tag-btn"
+                                                onClick={() => {
+                                                    const tag = prompt('태그를 입력하세요:');
+                                                    if (tag) {
+                                                        const currentTags = Array.isArray(item.tags) ? item.tags : [];
+                                                        handleUpdateItem(item.id, { tags: [...currentTags, tag] });
+                                                    }
+                                                }}
+                                            >
+                                                <TagIcon size={12} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={12} className="empty-row" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-tertiary)' }}>
+                                    보관함에 영상이 없습니다.
+                                </td>
+                            </tr>
+                        )}
+
+                        {/* Secondary Toggle Header */}
+                        {secondaryItems.length > 0 && (
+                            <tr className="secondary-toggle-row" onClick={(e) => { e.stopPropagation(); setIsSecondaryExpanded(!isSecondaryExpanded); }} style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
+                                <td colSpan={12} style={{ padding: '0.8rem 1rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)' }}>
+                                        <span style={{ fontSize: '0.8em', transition: 'transform 0.2s', transform: isSecondaryExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▼</span>
+                                        <strong style={{ fontSize: '0.95rem' }}>다른 언어/지역 검색 결과 ({secondaryItems.length})</strong>
+                                        <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', fontWeight: 'normal' }}>
+                                            - 주변부 실적/정보 위주 {isSecondaryExpanded ? '(접기)' : '(펼치기)'}
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+
+                        {/* Secondary Items */}
+                        {secondaryItems.length > 0 && isSecondaryExpanded && secondaryItems.map((item, idx) => (
+                            <tr key={item.id} className={`secondary-row ${selectedItems.has(item.id) ? 'selected' : ''}`} onClick={() => toggleSelect(item.id)} style={{ opacity: 0.7, background: 'rgba(0,0,0,0.1)' }}>
                                 <td className="col-check" onClick={(e) => e.stopPropagation()}>
                                     <input type="checkbox" checked={selectedItems.has(item.id)} onChange={() => toggleSelect(item.id)} />
                                 </td>
-                                <td>{idx + 1}</td>
+                                <td>{primaryItems.length + idx + 1}</td>
                                 <td className="col-thumb">
                                     <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer">
-                                        <img src={item.thumbnail} alt="" />
+                                        <img src={item.thumbnail} alt="" style={{ filter: 'grayscale(0.3)' }} />
                                     </a>
                                 </td>
                                 <td>
                                     <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="video-link">
-                                        <div className="video-title-small">{item.title}</div>
+                                        <div className="video-title-small" style={{ color: 'var(--text-secondary)' }}>{item.title}</div>
                                     </a>
                                     <a href={`https://www.youtube.com/channel/${item.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
                                         <div className="channel-name-small">{item.channelTitle}</div>
                                     </a>
+                                    {item.searchRegion && <span className="region-badge-small" style={{ fontSize: '0.7rem', padding: '1px 4px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', marginLeft: '5px' }}>{item.searchRegion}</span>}
                                 </td>
                                 <td>{formatDuration(item.duration)}</td>
                                 <td>{formatNumber(item.subscriberCount || '0')}</td>
@@ -266,18 +396,6 @@ const Library = () => {
                                     </div>
                                     <div className="tags-list">
                                         {item.tags.map(tag => <span key={tag} className="tag-badge">{tag}</span>)}
-                                        <button
-                                            className="add-tag-btn"
-                                            onClick={() => {
-                                                const tag = prompt('태그를 입력하세요:');
-                                                if (tag) {
-                                                    const currentTags = Array.isArray(item.tags) ? item.tags : [];
-                                                    handleUpdateItem(item.id, { tags: [...currentTags, tag] });
-                                                }
-                                            }}
-                                        >
-                                            <TagIcon size={12} />
-                                        </button>
                                     </div>
                                 </td>
                             </tr>

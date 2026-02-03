@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAppStore, type SavedItem, formatNumber, formatDuration } from '../store/useAppStore';
 import { youtubeService } from '../services/youtubeService';
 import { dbService } from '../services/dbService';
-import { Search as SearchIcon, Filter, Save, Download, Calendar, Clock, MapPin, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search as SearchIcon, Filter, Save, Download, Calendar, Clock, MapPin, ChevronUp, ChevronDown, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './Search.css';
 
@@ -35,6 +35,7 @@ const Search = () => {
     const [loadingStatus, setLoadingStatus] = useState('');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [isSaving, setIsSaving] = useState(false);
+    const [isSecondaryExpanded, setIsSecondaryExpanded] = useState(true);
 
     // Regions list (fetched once)
     const [regions, setRegions] = useState<{ id: string; name: string }[]>([]);
@@ -367,22 +368,99 @@ const Search = () => {
 
     const toggleSelectAll = () => {
         const currentResults = filteredResults || [];
-        if (currentResults.length > 0 && selectedItems.size === currentResults.length) {
-            setSelectedItems(new Set());
+        // Determine if all *primary* results are currently selected
+        const allPrimarySelected = currentResults.length > 0 && currentResults.every(item => {
+            const id = item.id?.videoId || item.id;
+            return selectedItems.has(id);
+        });
+
+        if (allPrimarySelected) {
+            // Deselect all *primary* results
+            const newSelected = new Set(selectedItems);
+            currentResults.forEach(item => {
+                const id = item.id?.videoId || item.id;
+                newSelected.delete(id);
+            });
+            setSelectedItems(newSelected);
         } else {
-            setSelectedItems(new Set((currentResults || []).map(item => item.id?.videoId || item.id)));
+            // Select all *primary* results (merge with existing)
+            const newSelected = new Set(selectedItems);
+            currentResults.forEach(item => {
+                const id = item.id?.videoId || item.id;
+                if (id) newSelected.add(id);
+            });
+            setSelectedItems(newSelected);
+        }
+    };
+
+    const toggleSelectAllSecondary = () => {
+        const currentResults = filteredSecondaryResults || [];
+        // Determine if all *secondary* results are selected
+        const allSecondarySelected = currentResults.length > 0 && currentResults.every(item => {
+            const id = item.id?.videoId || item.id;
+            return selectedItems.has(id);
+        });
+
+        if (allSecondarySelected) {
+            // Deselect all *secondary*
+            const newSelected = new Set(selectedItems);
+            currentResults.forEach(item => {
+                const id = item.id?.videoId || item.id;
+                newSelected.delete(id);
+            });
+            setSelectedItems(newSelected);
+        } else {
+            // Select all *secondary*
+            const newSelected = new Set(selectedItems);
+            currentResults.forEach(item => {
+                const id = item.id?.videoId || item.id;
+                if (id) newSelected.add(id);
+            });
+            setSelectedItems(newSelected);
         }
     };
 
     const handleSaveToLibrary = async () => {
+        setIsLoading(true); // Re-use isLoading or dedicated isSaving
         setIsSaving(true);
-        const { user } = useAppStore.getState();
+        const { user, library } = useAppStore.getState();
 
-        const itemsToSave: SavedItem[] = (results || [])
-            .map(item => {
+        const allItems = [...(results || []), ...(secondaryResults || [])];
+        const selectedList = allItems.filter(item => {
+            const videoId = item.id?.videoId || item.id;
+            return selectedItems.has(videoId);
+        });
+
+        if (selectedList.length === 0) {
+            alert('저장할 영상을 선택해주세요.');
+            setIsSaving(false);
+            setIsLoading(false);
+            return;
+        }
+
+        // 1. Check for duplicates in current library
+        const existingIds = new Set(library.map(i => i.id));
+        const newItemsToConvert = selectedList.filter(item => {
+            const videoId = item.id?.videoId || item.id;
+            return !existingIds.has(videoId);
+        });
+
+        if (newItemsToConvert.length === 0) {
+            alert('선택한 영상이 이미 보관함에 모두 존재합니다.');
+            setIsSaving(false);
+            setIsLoading(false);
+            return;
+        }
+
+        const secondaryIds = new Set((secondaryResults || []).map(i => i.id?.videoId || i.id));
+
+        const itemsToSave: SavedItem[] = newItemsToConvert
+            .map((item): SavedItem | null => {
                 const metrics = calculateMetrics(item);
                 const videoId = item.id?.videoId || item.id;
                 if (!videoId) return null;
+
+                const isSecondary = secondaryIds.has(videoId);
 
                 return {
                     id: videoId,
@@ -401,7 +479,10 @@ const Search = () => {
                     subscriberCount: item.channelStatistics?.subscriberCount || '0',
                     channelTotalViews: item.channelStatistics?.viewCount || '0',
                     performanceRatio: metrics.performanceRatio,
-                    contributionScore: metrics.contributionScore
+                    contributionScore: metrics.contributionScore,
+                    searchRegion: item.searchRegion || 'GL',
+                    isSecondary,
+                    searchQuery: query
                 };
             })
             .filter((item): item is SavedItem => item !== null);
@@ -412,12 +493,19 @@ const Search = () => {
             }
             addToLibrary(itemsToSave);
             setSelectedItems(new Set());
-            alert(`${itemsToSave.length}개의 영상이 보관함에 저장되었습니다.`);
+
+            const skippedCount = selectedList.length - newItemsToConvert.length;
+            if (skippedCount > 0) {
+                alert(`${itemsToSave.length}개의 새로운 영상이 저장되었습니다. (${skippedCount}개는 이미 존재)`);
+            } else {
+                alert(`${itemsToSave.length}개의 영상이 보관함에 저장되었습니다.`);
+            }
         } catch (error) {
             console.error('Save failed:', error);
             alert('저장 중 오류가 발생했습니다.');
         } finally {
             setIsSaving(false);
+            setIsLoading(false);
         }
     };
 
@@ -623,7 +711,13 @@ const Search = () => {
                                 <th className="col-check">
                                     <input
                                         type="checkbox"
-                                        checked={(filteredResults || []).length > 0 && selectedItems.size === (filteredResults || []).length}
+                                        checked={
+                                            (filteredResults || []).length > 0 &&
+                                            (filteredResults || []).every(item => {
+                                                const id = item.id?.videoId || item.id;
+                                                return selectedItems.has(id);
+                                            })
+                                        }
                                         onChange={toggleSelectAll}
                                     />
                                 </th>
@@ -645,10 +739,20 @@ const Search = () => {
                                     좋아요 {sortKey === 'likes' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                                 </th>
                                 <th className="sortable-header" onClick={() => handleSort('contribution')}>
-                                    기여도 {sortKey === 'contribution' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                    <span className="header-label">기여도</span>
+                                    <div className="tooltip-container">
+                                        <HelpCircle size={14} className="tooltip-icon" />
+                                        <div className="tooltip-text">영상 조회수 / 채널 전체 조회수 (%)</div>
+                                    </div>
+                                    {sortKey === 'contribution' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                                 </th>
                                 <th className="sortable-header" onClick={() => handleSort('performance')}>
-                                    성과도 {sortKey === 'performance' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                                    <span className="header-label">성과도</span>
+                                    <div className="tooltip-container">
+                                        <HelpCircle size={14} className="tooltip-icon" />
+                                        <div className="tooltip-text">조회수 / 구독자 수</div>
+                                    </div>
+                                    {sortKey === 'performance' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                                 </th>
                                 <th className="sortable-header" onClick={() => handleSort('publishedAt')}>
                                     업로드일 {sortKey === 'publishedAt' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
@@ -712,76 +816,103 @@ const Search = () => {
                     {/* Secondary Results Section (Other Languages) */}
                     {(filteredSecondaryResults || []).length > 0 && (
                         <div className="secondary-results-section" style={{ marginTop: '3rem', opacity: 0.85, paddingBottom: '2rem' }}>
-                            <div className="secondary-header" style={{ marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
+                            <div
+                                className="secondary-header"
+                                style={{
+                                    marginBottom: '1rem',
+                                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                    paddingBottom: '0.5rem',
+                                    paddingLeft: '1rem',
+                                    paddingRight: '1rem',
+                                    cursor: 'pointer',
+                                    userSelect: 'none'
+                                }}
+                                onClick={() => setIsSecondaryExpanded(!isSecondaryExpanded)}
+                            >
                                 <h4 style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontSize: '0.9em' }}>▼</span> 다른 언어/지역 검색 결과 ({(filteredSecondaryResults || []).length})
+                                    <span style={{ fontSize: '0.9em', transition: 'transform 0.2s', transform: isSecondaryExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▼</span> 다른 언어/지역 검색 결과 ({(filteredSecondaryResults || []).length})
                                 </h4>
                                 <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginLeft: '1.5rem' }}>
-                                    선택한 국가({selectedRegions.join(', ')})의 언어와 일치하지 않을 수 있는 영상들입니다.
+                                    선택한 국가({selectedRegions.join(', ')})의 언어와 일치하지 않을 수 있는 영상들입니다. {isSecondaryExpanded ? '(접기)' : '(펼치기)'}
                                 </p>
                             </div>
-                            <div className="secondary-container">
-                                <table className="results-table secondary-table">
-                                    <thead>
-                                        <tr>
-                                            <th className="col-check"></th>
-                                            <th>No.</th>
-                                            <th>썸네일</th>
-                                            <th>제목 / 채널</th>
-                                            <th>길이</th>
-                                            <th>구독자</th>
-                                            <th>조회수</th>
-                                            <th>좋아요</th>
-                                            <th>기여도</th>
-                                            <th>성과도</th>
-                                            <th>업로드일</th>
-                                            <th>국가</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {(filteredSecondaryResults || []).map((item, idx) => {
-                                            if (!item) return null;
-                                            const metrics = calculateMetrics(item);
-                                            const videoId = item.id?.videoId || item.id;
-                                            if (!videoId) return null;
 
-                                            return (
-                                                <tr key={videoId} className={selectedItems.has(videoId) ? 'selected' : ''} onClick={() => toggleSelect(videoId)}>
-                                                    <td className="col-check" onClick={(e) => e.stopPropagation()}>
-                                                        <input type="checkbox" checked={selectedItems.has(videoId)} onChange={() => toggleSelect(videoId)} />
-                                                    </td>
-                                                    <td>{idx + 1}</td>
-                                                    <td className="col-thumb">
-                                                        <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer">
-                                                            <img src={item.snippet?.thumbnails?.medium?.url} alt="" />
-                                                        </a>
-                                                    </td>
-                                                    <td>
-                                                        <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer" className="video-link">
-                                                            <div className="video-title">{item.snippet?.title}</div>
-                                                        </a>
-                                                        <a href={`https://www.youtube.com/channel/${item.snippet?.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
-                                                            <div className="channel-name-small">{item.snippet?.channelTitle}</div>
-                                                        </a>
-                                                    </td>
-                                                    <td>{formatDuration(item.contentDetails?.duration || '')}</td>
-                                                    <td>{formatNumber(item.channelStatistics?.subscriberCount || '0')}</td>
-                                                    <td>{formatNumber(item.statistics?.viewCount || '0')}</td>
-                                                    <td>{formatNumber(item.statistics?.likeCount || '0')}</td>
-                                                    <td>{(metrics.contributionScore || 0).toFixed(2)}%</td>
-                                                    <td className={`perf-badge ${(metrics.performanceRatio || 0) >= 1 ? 'high' : ''}`}>
-                                                        x{(metrics.performanceRatio || 0).toFixed(1)}
-                                                    </td>
-                                                    <td>{item.snippet?.publishedAt ? new Date(item.snippet.publishedAt).toLocaleDateString() : '-'}</td>
-                                                    <td>
-                                                        <span className="region-badge">{item.searchRegion || 'GL'}</span>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                            {isSecondaryExpanded && (
+                                <div className="secondary-container">
+                                    <table className="results-table secondary-table">
+                                        <thead>
+                                            <tr>
+                                                <th className="col-check">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={
+                                                            (filteredSecondaryResults || []).length > 0 &&
+                                                            (filteredSecondaryResults || []).every(item => {
+                                                                const id = item.id?.videoId || item.id;
+                                                                return selectedItems.has(id);
+                                                            })
+                                                        }
+                                                        onChange={toggleSelectAllSecondary}
+                                                    />
+                                                </th>
+                                                <th>No.</th>
+                                                <th>썸네일</th>
+                                                <th>제목 / 채널</th>
+                                                <th>길이</th>
+                                                <th>구독자</th>
+                                                <th>조회수</th>
+                                                <th>좋아요</th>
+                                                <th>기여도</th>
+                                                <th>성과도</th>
+                                                <th>업로드일</th>
+                                                <th>국가</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(filteredSecondaryResults || []).map((item, idx) => {
+                                                if (!item) return null;
+                                                const metrics = calculateMetrics(item);
+                                                const videoId = item.id?.videoId || item.id;
+                                                if (!videoId) return null;
+
+                                                return (
+                                                    <tr key={videoId} className={selectedItems.has(videoId) ? 'selected' : ''} onClick={() => toggleSelect(videoId)}>
+                                                        <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                                                            <input type="checkbox" checked={selectedItems.has(videoId)} onChange={() => toggleSelect(videoId)} />
+                                                        </td>
+                                                        <td>{idx + 1}</td>
+                                                        <td className="col-thumb">
+                                                            <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer">
+                                                                <img src={item.snippet?.thumbnails?.medium?.url} alt="" />
+                                                            </a>
+                                                        </td>
+                                                        <td>
+                                                            <a href={`https://www.youtube.com/watch?v=${videoId}`} target="_blank" rel="noopener noreferrer" className="video-link">
+                                                                <div className="video-title">{item.snippet?.title}</div>
+                                                            </a>
+                                                            <a href={`https://www.youtube.com/channel/${item.snippet?.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
+                                                                <div className="channel-name-small">{item.snippet?.channelTitle}</div>
+                                                            </a>
+                                                        </td>
+                                                        <td>{formatDuration(item.contentDetails?.duration || '')}</td>
+                                                        <td>{formatNumber(item.channelStatistics?.subscriberCount || '0')}</td>
+                                                        <td>{formatNumber(item.statistics?.viewCount || '0')}</td>
+                                                        <td>{formatNumber(item.statistics?.likeCount || '0')}</td>
+                                                        <td>{(metrics.contributionScore || 0).toFixed(2)}%</td>
+                                                        <td className={`perf-badge ${(metrics.performanceRatio || 0) >= 1 ? 'high' : ''}`}>
+                                                            x{(metrics.performanceRatio || 0).toFixed(1)}
+                                                        </td>
+                                                        <td>{item.snippet?.publishedAt ? new Date(item.snippet.publishedAt).toLocaleDateString() : '-'}</td>
+                                                        <td>
+                                                            <span className="region-badge">{item.searchRegion || 'GL'}</span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     )}
                     {/* Load More Button */}

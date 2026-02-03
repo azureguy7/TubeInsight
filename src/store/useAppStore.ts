@@ -20,6 +20,9 @@ export interface SavedItem {
     channelTotalViews: string;
     performanceRatio: number;
     contributionScore: number;
+    searchRegion?: string;
+    isSecondary?: boolean;
+    searchQuery?: string;
 }
 
 interface AppState {
