@@ -31,6 +31,12 @@ interface AppState {
     addToLibrary: (items: SavedItem[]) => void;
     removeFromLibrary: (ids: string[]) => void;
     updateLibraryItem: (id: string, updates: Partial<SavedItem>) => void;
+    setLibrary: (items: SavedItem[]) => void;
+    // Supabase States
+    user: any | null;
+    setUser: (user: any) => void;
+    session: any | null;
+    setSession: (session: any) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -52,6 +58,11 @@ export const useAppStore = create<AppState>()(
             updateLibraryItem: (id, updates) => set((state) => ({
                 library: state.library.map(item => item.id === id ? { ...item, ...updates } : item)
             })),
+            setLibrary: (library) => set({ library }),
+            user: null,
+            setUser: (user) => set({ user }),
+            session: null,
+            setSession: (session) => set({ session }),
         }),
         {
             name: 'tube-insight-storage',

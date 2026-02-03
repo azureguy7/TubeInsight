@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore, type SavedItem, formatNumber, formatDuration } from '../store/useAppStore';
 import { youtubeService } from '../services/youtubeService';
-import { Search as SearchIcon, Filter, Save, Download, Calendar, Clock, Globe } from 'lucide-react';
+import { dbService } from '../services/dbService';
+import { Search as SearchIcon, Filter, Save, Download, Calendar, Clock, MapPin } from 'lucide-react';
 import './Search.css';
 
 const Search = () => {
@@ -12,10 +13,27 @@ const Search = () => {
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [isSaving, setIsSaving] = useState(false);
 
+    // Regions
+    const [regions, setRegions] = useState<{ id: string; name: string }[]>([]);
+    const [selectedRegions, setSelectedRegions] = useState<string[]>(['KR']);
+
     // Filters
     const [publishedAfter, setPublishedAfter] = useState('');
     const [duration, setDuration] = useState('any');
-    const [relevanceLanguage, setRelevanceLanguage] = useState('ko');
+
+    useEffect(() => {
+        if (isValidated && apiKey) {
+            youtubeService.getRegions(apiKey).then(data => {
+                // Sort regions to put Korea at top if available
+                const sorted = data.sort((a: any, b: any) => {
+                    if (a.id === 'KR') return -1;
+                    if (b.id === 'KR') return 1;
+                    return a.name.localeCompare(b.name);
+                });
+                setRegions(sorted);
+            });
+        }
+    }, [isValidated, apiKey]);
 
     const handleSearch = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -23,16 +41,35 @@ const Search = () => {
 
         setIsLoading(true);
         try {
-            const params: any = {
-                relevanceLanguage,
-            };
-            if (publishedAfter) params.publishedAfter = new Date(publishedAfter).toISOString();
-            if (duration !== 'any') params.videoDuration = duration;
+            const commonParams: any = {};
+            if (publishedAfter) commonParams.publishedAfter = new Date(publishedAfter).toISOString();
+            if (duration !== 'any') commonParams.videoDuration = duration;
 
-            const data = await youtubeService.searchVideos(apiKey, query, params);
-            setResults(data.items || []);
+            let allMergedItems: any[] = [];
+            const seenVideoIds = new Set<string>();
+
+            // Multi-Region Search Loop
+            const regionList = selectedRegions.length > 0 ? selectedRegions : ['KR'];
+
+            for (const regionCode of regionList) {
+                const data = await youtubeService.searchVideos(apiKey, query, {
+                    ...commonParams,
+                    regionCode
+                });
+
+                if (data.items) {
+                    data.items.forEach((item: any) => {
+                        if (!seenVideoIds.has(item.id.videoId)) {
+                            seenVideoIds.add(item.id.videoId);
+                            allMergedItems.push(item);
+                        }
+                    });
+                }
+            }
+
+            setResults(allMergedItems);
         } catch (error) {
-            alert('검색 중 오류가 발생했습니다.');
+            alert('검색 중 오류가 발생했습니다. (API 할당량 초과 여부를 확인해 주세요)');
         } finally {
             setIsLoading(false);
         }
@@ -64,8 +101,10 @@ const Search = () => {
         };
     };
 
-    const handleSaveToLibrary = () => {
+    const handleSaveToLibrary = async () => {
         setIsSaving(true);
+        const { user } = useAppStore.getState();
+
         const itemsToSave: SavedItem[] = results
             .filter(item => selectedItems.has(item.id.videoId))
             .map(item => {
@@ -91,10 +130,19 @@ const Search = () => {
                 };
             });
 
-        addToLibrary(itemsToSave);
-        setSelectedItems(new Set());
-        setIsSaving(false);
-        alert(`${itemsToSave.length}개의 영상이 보관함에 저장되었습니다.`);
+        try {
+            if (user) {
+                await dbService.saveVideos(user.id, itemsToSave);
+            }
+            addToLibrary(itemsToSave);
+            setSelectedItems(new Set());
+            alert(`${itemsToSave.length}개의 영상이 보관함에 저장되었습니다.`);
+        } catch (error) {
+            console.error('Save failed:', error);
+            alert('저장 중 오류가 발생했습니다.');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     if (!isValidated) {
@@ -119,7 +167,24 @@ const Search = () => {
                 </div>
                 <div className="filter-group">
                     <label><Calendar size={16} /> 업로드 날짜 이후</label>
-                    <input type="date" value={publishedAfter} onChange={(e) => setPublishedAfter(e.target.value)} />
+                    <div className="date-input-group">
+                        <input
+                            type="text"
+                            placeholder="YYYY-MM-DD"
+                            value={publishedAfter}
+                            onChange={(e) => setPublishedAfter(e.target.value)}
+                            className="date-text-input"
+                        />
+                        <div className="calendar-picker-wrapper">
+                            <input
+                                type="date"
+                                value={publishedAfter}
+                                onChange={(e) => setPublishedAfter(e.target.value)}
+                                className="hidden-date-picker"
+                            />
+                            <Calendar size={18} className="calendar-icon-btn" />
+                        </div>
+                    </div>
                 </div>
                 <div className="filter-group">
                     <label><Clock size={16} /> 영상 길이</label>
@@ -131,12 +196,25 @@ const Search = () => {
                     </select>
                 </div>
                 <div className="filter-group">
-                    <label><Globe size={16} /> 언어 (Relevance)</label>
-                    <select value={relevanceLanguage} onChange={(e) => setRelevanceLanguage(e.target.value)}>
-                        <option value="ko">한국어</option>
-                        <option value="en">영어</option>
-                        <option value="ja">일본어</option>
-                    </select>
+                    <label><MapPin size={16} /> 대상 국가 (중복 선택)</label>
+                    <div className="region-selector-list glass">
+                        {regions.map(region => (
+                            <label key={region.id} className="region-checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedRegions.includes(region.id)}
+                                    onChange={() => {
+                                        setSelectedRegions(prev =>
+                                            prev.includes(region.id)
+                                                ? prev.filter(r => r !== region.id)
+                                                : [...prev, region.id]
+                                        );
+                                    }}
+                                />
+                                <span>{region.name} ({region.id})</span>
+                            </label>
+                        ))}
+                    </div>
                 </div>
             </aside>
 

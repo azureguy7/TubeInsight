@@ -92,4 +92,23 @@ export const youtubeService = {
             throw error;
         }
     },
+
+    getRegions: async (apiKey: string) => {
+        try {
+            const response = await axios.get(`${BASE_URL}/i18nRegions`, {
+                params: {
+                    key: apiKey,
+                    part: 'snippet',
+                    hl: 'ko', // Korean display names
+                },
+            });
+            return response.data.items.map((item: any) => ({
+                id: item.snippet.gl,
+                name: item.snippet.name,
+            }));
+        } catch (error) {
+            console.error('Fetch Regions Error:', error);
+            return [];
+        }
+    },
 };

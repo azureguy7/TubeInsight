@@ -1,24 +1,45 @@
 import { useState } from 'react';
-import { useAppStore, formatNumber, formatDuration } from '../store/useAppStore';
+import { useAppStore, formatNumber, formatDuration, type SavedItem } from '../store/useAppStore';
 import { Trash2, Download, Edit3, Tag as TagIcon, Search as SearchIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { dbService } from '../services/dbService';
 import './Library.css';
 
 const Library = () => {
-    const { library, removeFromLibrary, updateLibraryItem } = useAppStore();
+    const { library, removeFromLibrary, updateLibraryItem, user } = useAppStore();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [editingId, setEditingId] = useState<string | null>(null);
 
-    const filteredLibrary = library.filter(item =>
+    const filteredLibrary = library.filter((item: SavedItem) =>
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.channelTitle.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (window.confirm(`${selectedItems.size}개의 항목을 삭제하시겠습니까?`)) {
-            removeFromLibrary(Array.from(selectedItems));
-            setSelectedItems(new Set());
+            const idsToDelete = Array.from(selectedItems);
+            try {
+                if (user) {
+                    await dbService.removeVideos(user.id, idsToDelete);
+                }
+                removeFromLibrary(idsToDelete);
+                setSelectedItems(new Set());
+            } catch (error) {
+                console.error('Delete sync failed:', error);
+                alert('삭제 동기화 중 오류가 발생했습니다.');
+            }
+        }
+    };
+
+    const handleUpdateItem = async (id: string, updates: Partial<SavedItem>) => {
+        try {
+            if (user) {
+                await dbService.updateVideo(user.id, id, updates);
+            }
+            updateLibraryItem(id, updates);
+        } catch (error) {
+            console.error('Update sync failed:', error);
         }
     };
 
@@ -139,7 +160,7 @@ const Library = () => {
                                             <textarea
                                                 autoFocus
                                                 value={item.note}
-                                                onChange={(e) => updateLibraryItem(item.id, { note: e.target.value })}
+                                                onChange={(e) => handleUpdateItem(item.id, { note: e.target.value })}
                                                 onBlur={() => setEditingId(null)}
                                             />
                                         ) : (
@@ -150,7 +171,15 @@ const Library = () => {
                                     </div>
                                     <div className="tags-list">
                                         {item.tags.map(tag => <span key={tag} className="tag-badge">{tag}</span>)}
-                                        <button className="add-tag-btn"><TagIcon size={12} /></button>
+                                        <button
+                                            className="add-tag-btn"
+                                            onClick={() => {
+                                                const tag = prompt('태그를 입력하세요:');
+                                                if (tag) handleUpdateItem(item.id, { tags: [...item.tags, tag] });
+                                            }}
+                                        >
+                                            <TagIcon size={12} />
+                                        </button>
                                     </div>
                                 </td>
                                 <td className="col-date">{new Date(item.savedAt).toLocaleDateString()}</td>

@@ -1,4 +1,8 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { supabase } from './services/supabaseClient';
+import { useAppStore } from './store/useAppStore';
+import { useSync } from './hooks/useSync';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Search from './pages/Search';
@@ -7,6 +11,25 @@ import Settings from './pages/Settings';
 import './styles/global.css';
 
 function App() {
+  const { setUser, setSession } = useAppStore();
+  useSync();
+
+  useEffect(() => {
+    // 1. Initial Session Check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+    });
+
+    // 2. Auth Listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [setUser, setSession]);
+
   return (
     <Router>
       <div className="app-container">
