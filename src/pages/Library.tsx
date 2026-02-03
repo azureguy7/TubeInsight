@@ -30,12 +30,12 @@ const Library = () => {
                 '제목': item.title,
                 '채널명': item.channelTitle,
                 '업로드 날짜': new Date(item.publishedAt).toLocaleDateString(),
-                '구독자수': item.subscriberCount,
-                '조회수': item.viewCount,
-                '좋아요 수': item.likeCount,
+                '구독자수': item.subscriberCount || '0',
+                '조회수': item.viewCount || '0',
+                '좋아요 수': item.likeCount || '0',
                 '영상 길이': formatDuration(item.duration),
-                '채널 기여도(%)': item.contributionScore.toFixed(2),
-                '성과도 배율': item.performanceRatio.toFixed(2),
+                '채널 기여도(%)': (item.contributionScore || 0).toFixed(2),
+                '성과도 배율': (item.performanceRatio || 0).toFixed(2),
                 '메모': item.note,
                 '태그': item.tags.join(', '),
                 '링크': `https://www.youtube.com/watch?v=${item.id}`
@@ -113,18 +113,24 @@ const Library = () => {
                                 </td>
                                 <td>{idx + 1}</td>
                                 <td className="col-thumb">
-                                    <img src={item.thumbnail} alt="" />
+                                    <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer">
+                                        <img src={item.thumbnail} alt="" />
+                                    </a>
                                 </td>
                                 <td className="col-info">
-                                    <div className="channel-name">{item.channelTitle}</div>
-                                    <div className="video-title-small">{item.title}</div>
+                                    <a href={`https://www.youtube.com/channel/${item.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
+                                        <div className="channel-name">{item.channelTitle}</div>
+                                    </a>
+                                    <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="video-link">
+                                        <div className="video-title-small">{item.title}</div>
+                                    </a>
                                 </td>
                                 <td className="col-metrics">
-                                    <div className="metric-row">조회: {formatNumber(item.viewCount)}</div>
-                                    <div className="metric-row">구독: {formatNumber(item.subscriberCount)}</div>
-                                    <div className="metric-row">기여: {item.contributionScore.toFixed(1)}%</div>
-                                    <div className={`metric-row perf ${item.performanceRatio >= 1 ? 'high' : ''}`}>
-                                        성과: x{item.performanceRatio.toFixed(1)}
+                                    <div className="metric-row">조회: {formatNumber(item.viewCount || '0')}</div>
+                                    <div className="metric-row">구독: {formatNumber(item.subscriberCount || '0')}</div>
+                                    <div className="metric-row">기여: {(item.contributionScore || 0).toFixed(1)}%</div>
+                                    <div className={`metric-row perf ${(item.performanceRatio || 0) >= 1 ? 'high' : ''}`}>
+                                        성과: x{(item.performanceRatio || 0).toFixed(1)}
                                     </div>
                                 </td>
                                 <td className="col-meta" onClick={(e) => e.stopPropagation()}>

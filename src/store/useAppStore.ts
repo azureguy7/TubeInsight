@@ -6,6 +6,7 @@ export interface SavedItem {
     title: string;
     thumbnail: string;
     channelTitle: string;
+    channelId: string;
     publishedAt: string;
     description: string;
     tags: string[];

@@ -206,6 +206,21 @@
     margin-top: 0.2rem;
 }
 
+.video-link,
+.channel-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+.video-link:hover .video-title {
+    color: var(--accent-primary);
+}
+
+.channel-link:hover .channel-name-small {
+    text-decoration: underline;
+}
+
 .perf-badge {
     font-weight: 700;
     color: var(--text-secondary);

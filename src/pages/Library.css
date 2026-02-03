@@ -140,6 +140,22 @@
     align-items: center;
 }
 
+.video-link,
+.channel-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+.channel-link:hover .channel-name {
+    color: var(--accent-primary);
+    text-decoration: underline;
+}
+
+.video-link:hover .video-title-small {
+    opacity: 0.8;
+}
+
 .col-metrics {
     font-size: 0.8rem;
     display: flex;

@@ -54,9 +54,9 @@ const Search = () => {
     };
 
     const calculateMetrics = (item: any) => {
-        const viewCount = parseInt(item.statistics.viewCount || '0', 10);
-        const subCount = parseInt(item.channelStatistics.subscriberCount || '1', 10);
-        const totalViews = parseInt(item.channelStatistics.viewCount || '1', 10);
+        const viewCount = parseInt(item.statistics?.viewCount || '0', 10);
+        const subCount = parseInt(item.channelStatistics?.subscriberCount || '1', 10);
+        const totalViews = parseInt(item.channelStatistics?.viewCount || '1', 10);
 
         return {
             performanceRatio: viewCount / subCount,
@@ -75,6 +75,7 @@ const Search = () => {
                     title: item.snippet.title,
                     thumbnail: item.snippet.thumbnails.medium.url,
                     channelTitle: item.snippet.channelTitle,
+                    channelId: item.snippet.channelId,
                     publishedAt: item.snippet.publishedAt,
                     description: item.snippet.description,
                     tags: [],
@@ -195,19 +196,25 @@ const Search = () => {
                                         </td>
                                         <td>{idx + 1}</td>
                                         <td className="col-thumb">
-                                            <img src={item.snippet.thumbnails.medium.url} alt="" />
+                                            <a href={`https://www.youtube.com/watch?v=${item.id.videoId}`} target="_blank" rel="noopener noreferrer">
+                                                <img src={item.snippet.thumbnails.medium.url} alt="" />
+                                            </a>
                                         </td>
                                         <td>
-                                            <div className="video-title">{item.snippet.title}</div>
-                                            <div className="channel-name-small">{item.snippet.channelTitle}</div>
+                                            <a href={`https://www.youtube.com/watch?v=${item.id.videoId}`} target="_blank" rel="noopener noreferrer" className="video-link">
+                                                <div className="video-title">{item.snippet.title}</div>
+                                            </a>
+                                            <a href={`https://www.youtube.com/channel/${item.snippet.channelId}`} target="_blank" rel="noopener noreferrer" className="channel-link">
+                                                <div className="channel-name-small">{item.snippet.channelTitle}</div>
+                                            </a>
                                         </td>
-                                        <td>{formatDuration(item.contentDetails.duration)}</td>
-                                        <td>{formatNumber(item.channelStatistics.subscriberCount)}</td>
-                                        <td>{formatNumber(item.statistics.viewCount)}</td>
-                                        <td>{formatNumber(item.statistics.likeCount)}</td>
-                                        <td>{metrics.contributionScore.toFixed(2)}%</td>
-                                        <td className={`perf-badge ${metrics.performanceRatio >= 1 ? 'high' : ''}`}>
-                                            x{metrics.performanceRatio.toFixed(1)}
+                                        <td>{formatDuration(item.contentDetails?.duration || '')}</td>
+                                        <td>{formatNumber(item.channelStatistics?.subscriberCount || '0')}</td>
+                                        <td>{formatNumber(item.statistics?.viewCount || '0')}</td>
+                                        <td>{formatNumber(item.statistics?.likeCount || '0')}</td>
+                                        <td>{(metrics.contributionScore || 0).toFixed(2)}%</td>
+                                        <td className={`perf-badge ${(metrics.performanceRatio || 0) >= 1 ? 'high' : ''}`}>
+                                            x{(metrics.performanceRatio || 0).toFixed(1)}
                                         </td>
                                         <td>{new Date(item.snippet.publishedAt).toLocaleDateString()}</td>
                                     </tr>
