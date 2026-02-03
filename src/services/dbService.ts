@@ -30,7 +30,9 @@ export const dbService = {
             subscriberCount: item.subscriber_count,
             channelTotalViews: '0', // Need to handle total views if needed
             performanceRatio: Number(item.performance_ratio),
-            contributionScore: Number(item.contribution_score)
+            contributionScore: Number(item.contribution_score),
+            isSecondary: item.is_secondary || false,
+            searchQuery: item.search_query || ''
         })) as SavedItem[];
     },
 
@@ -51,7 +53,9 @@ export const dbService = {
             performance_ratio: item.performanceRatio,
             contribution_score: item.contributionScore,
             note: item.note,
-            tags: item.tags
+            tags: item.tags,
+            is_secondary: item.isSecondary || false,
+            search_query: item.searchQuery || ''
         }));
 
         const { error } = await supabase
